@@ -1,0 +1,4 @@
+mcollective
+===========
+
+mcollective plugins/agents
