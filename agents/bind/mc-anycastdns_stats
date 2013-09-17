@@ -1,0 +1,47 @@
+#!/usr/local/bin/ruby19
+# Author: Todor Genov (tgenov@gmail.com)
+
+require 'mcollective'
+include MCollective::RPC
+
+options = rpcoptions do |parser, options|
+   parser.define_head "AnycastDNS Top talkers"
+   parser.banner = "Usage: mc-anycastdns_stats --num N --time SEC "
+
+   parser.on('-s', '--runtime SEC', 'Number of seconds to sample traffic for. Default 5') do |v|
+      options[:time_period] = v.to_i
+   end
+   parser.on('-n', '--num N', 'Return the Top N talkers from the DNS cluster. Default 5') do |v|
+	options[:max_hosts] = v.to_i
+   end
+end
+
+unless options.include?(:time_period)
+	options[:time_period] = 5
+end
+
+unless options.include?(:max_hosts)
+	options[:max_hosts] = 5
+end
+
+mc = rpcclient("bind",:options => options)
+result = mc.top(:max_hosts => options[:max_hosts], :time_period => options[:time_period])
+mc.disconnect
+
+aggregate = {}
+
+result.each { |resp|
+	aggregate = aggregate.merge(resp[:data]) { |key,v1,v2| v1+v2 }
+}
+
+puts "Runtime: #{options[:time_period]} seconds"
+puts "Total queries: #{aggregate[:total_packet_count]}"
+puts "Total qps: #{aggregate[:total_qps]}"
+puts
+
+puts "Top #{options[:max_hosts]} talkers:"
+sorted = aggregate[:ip_qps].sort_by {|ip,qps| qps}
+sorted.reverse!
+sorted[1..options[:max_hosts]].each  { |host,qc|
+	printf "Host: %s, Total queries: %s, qps: %s, percent %.2f\n" % [ host, qc, qc/options[:time_period], qc/aggregate[:total_packet_count].to_f*100]
+}

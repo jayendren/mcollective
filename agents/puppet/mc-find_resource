@@ -1,0 +1,38 @@
+#!/usr/local/bin/ruby19
+# Author: Jayendren Maduray (jayendren@gmail.com)
+
+require 'mcollective'
+require 'colorize'
+include MCollective::RPC
+
+options = rpcoptions do |parser, options|
+   parser.define_head "Search for file/user/package resources on a host"
+   parser.banner = "Usage: mc-find_resource --name 'user jay' or 'file /usr/local/bin/bash' or 'package devel/subversion' "
+
+   parser.on('-n', '--name resource header resource name', 'Search for file/user/package resources on a host') do |v|
+      options[:name] = v.to_s
+   end
+end
+
+case options[:name]
+  when ""
+    puts "Usage: mc-find_resource --name 'user jay' or 'file /usr/local/bin/bash' or 'package devel/subversion' "
+  else
+    puts "searching for #{options[:name]} on hosts...\n".green
+
+    mc = rpcclient("puppet",:options => options)
+    result = mc.face(:action => "face", :subcommand => "resource", :action => options[:name])
+    mc.disconnect
+
+    aggregate = {}
+
+    result.each { |resp|
+      aggregate = aggregate.merge(resp[:data])
+      output = aggregate[:output]
+      sender = resp[:sender]
+      unless  output.empty?
+        puts "**** #{sender} ****".blue
+        puts "\n #{output} \n".red
+      end
+    }    
+end

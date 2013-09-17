@@ -1,0 +1,58 @@
+#!/usr/local/bin/ruby19
+# Author: Jayendren Maduray (jayendren@gmail.com)
+
+require 'mcollective'
+require 'colorize'
+include MCollective::RPC
+
+options = rpcoptions do |parser, options|
+   parser.define_head "FreeBSD portaudit Remote Vulnerabilities check/update script"
+   parser.banner = "Usage: mc-portaudit --command check or update auditfile"
+
+   parser.on('-c', '--command check or update', 'Peform a check or an update') do |v|
+      options[:command] = v.to_s
+   end
+end
+
+case options[:command]
+  when "check"
+    puts "checking for remote vulnerabilities on FreeBSD hosts...\n".green
+
+    mc = rpcclient("portaudit",:options => options)
+    result = mc.check
+    mc.disconnect
+
+    aggregate = {}
+
+    result.each { |resp|
+      aggregate = aggregate.merge(resp[:data])
+      output = aggregate[:portaudit_remote_stats]
+      sender = resp[:sender]
+      unless  output.empty?
+        puts "**** #{sender} ****".blue
+        puts "-- \n #{output} \n--".red
+      end
+    }
+
+  when "update"
+    puts "updating portaudit database on FreeBSD hosts...\n".green
+
+    mc = rpcclient("portaudit",:options => options)
+    result = mc.update
+    mc.disconnect
+
+    aggregate = {}
+
+    result.each { |resp|
+      aggregate = aggregate.merge(resp[:data])
+      output = aggregate[:portaudit_update_stats]
+      sender = resp[:sender]
+      unless  output.empty?
+        puts "**** #{sender} ****".blue
+        puts "-- \n #{output} \n--".red
+      end
+    }
+
+  else
+    puts "Usage: mc-portaudit --command check or update "
+end
