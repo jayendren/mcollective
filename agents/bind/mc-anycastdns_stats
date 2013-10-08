@@ -1,7 +1,9 @@
 #!/usr/local/bin/ruby19
 # Author: Todor Genov (tgenov@gmail.com)
+# Author: Jayendren Maduray (jayendren@gmail.com)
 
 require 'mcollective'
+require 'colorize'
 include MCollective::RPC
 
 options = rpcoptions do |parser, options|
@@ -12,36 +14,52 @@ options = rpcoptions do |parser, options|
       options[:time_period] = v.to_i
    end
    parser.on('-n', '--num N', 'Return the Top N talkers from the DNS cluster. Default 5') do |v|
-	options[:max_hosts] = v.to_i
+  options[:max_hosts] = v.to_i
    end
 end
 
 unless options.include?(:time_period)
-	options[:time_period] = 5
+  options[:time_period] = 5
 end
 
 unless options.include?(:max_hosts)
-	options[:max_hosts] = 5
+  options[:max_hosts] = 5
 end
 
 mc = rpcclient("bind",:options => options)
 result = mc.top(:max_hosts => options[:max_hosts], :time_period => options[:time_period])
 mc.disconnect
 
-aggregate = {}
+printf "\nNodes        :".green
+printf "\n--".cyan
 
-result.each { |resp|
-	aggregate = aggregate.merge(resp[:data]) { |key,v1,v2| v1+v2 }
+aggregate = {}
+result.each { |resp| #print nodes that exec plugin
+  aggregate = aggregate.merge(resp[:data]) { |key,v1,v2| v1+v2 }
+  sender = resp[:sender]
+  printf "\n%s ".cyan % [ sender ]
 }
 
-puts "Runtime: #{options[:time_period]} seconds"
-puts "Total queries: #{aggregate[:total_packet_count]}"
-puts "Total qps: #{aggregate[:total_qps]}"
-puts
+printf "\n--".cyan
+printf "\nTotal qps    :".green
+printf "%.02f".white.on_red.blink % [ aggregate[:total_qps] ]
+printf "\n"
+printf "Runtime      :".green
+printf "%s seconds".white.on_red.blink % [ options[:time_period] ]
 
-puts "Top #{options[:max_hosts]} talkers:"
+printf "\n--".cyan
+printf "\nTop #{options[:max_hosts]} talkers:".green
+printf "\n--\n".cyan
 sorted = aggregate[:ip_qps].sort_by {|ip,qps| qps}
 sorted.reverse!
 sorted[1..options[:max_hosts]].each  { |host,qc|
-	printf "Host: %s, Total queries: %s, qps: %s, percent %.2f\n" % [ host, qc, qc/options[:time_period], qc/aggregate[:total_packet_count].to_f*100]
+  printf "Host         :\s".cyan
+  printf "%s\n".red  % [ host ]
+  printf "Total queries:\s".cyan
+  printf "%s\n".red % [ qc ]
+  printf "qps          :\s".cyan
+  printf "%s\n".red % [ qc/options[:time_period] ]
+  printf "percent      :\s".cyan
+  printf "%.2f\n".red % [ qc/aggregate[:total_packet_count].to_f * 100 ]
+  printf "--\n".cyan
 }
